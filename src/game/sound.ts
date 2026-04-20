@@ -63,7 +63,7 @@ export function playConnect(chainLength: number) {
   tone(f, 0.07, "triangle", 0.12);
 }
 
-// Soft pop for regular clears. Scales up to a peak 'burst' for large clears.
+// Soft pop when dots clear.
 export function playClear(count: number) {
   if (muted) return;
   const c = getCtx();
@@ -72,22 +72,14 @@ export function playClear(count: number) {
   for (let i = 0; i < n; i++) {
     setTimeout(() => tone(520 + i * 45, 0.09, "sine", 0.16), i * 28);
   }
-  // Peak moment audio: large cluster gets a deep resonant bass layer.
-  if (count >= 6) {
-    tone(98, 0.35, "sawtooth", 0.08);
-    setTimeout(() => tone(130, 0.25, "sawtooth", 0.06), 40);
-  }
 }
 
-// Triumphant chord on loop close (rare = special) + bass anchor.
+// Triumphant chord on loop close (rare = special).
 export function playLoop() {
   if (muted) return;
-  // Full chord arpeggio
   [392, 523, 659, 784].forEach((f, i) =>
-    setTimeout(() => tone(f, 0.28, "triangle", 0.16), i * 50)
+    setTimeout(() => tone(f, 0.22, "triangle", 0.14), i * 50)
   );
-  // Deep bass anchor makes it feel physically weighty
-  tone(98, 0.4, "sawtooth", 0.1);
 }
 
 // Level-up arpeggio.
