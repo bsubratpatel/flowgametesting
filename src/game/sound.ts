@@ -2,6 +2,7 @@
 // No assets, no network. Tiny + satisfying.
 
 let ctx: AudioContext | null = null;
+let compressor: DynamicsCompressorNode | null = null;
 let muted = false;
 
 function getCtx(): AudioContext | null {
@@ -12,9 +13,23 @@ function getCtx(): AudioContext | null {
       | undefined;
     if (!AC) return null;
     ctx = new AC();
+    // Master compressor: maximises perceived loudness on mobile speakers.
+    compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = -18;
+    compressor.knee.value = 6;
+    compressor.ratio.value = 8;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.12;
+    compressor.connect(ctx.destination);
   }
   if (ctx.state === "suspended") ctx.resume().catch(() => {});
   return ctx;
+}
+
+// Returns the node all sounds should route into (compressor → destination).
+function getDest(): AudioNode {
+  const c = getCtx()!;
+  return compressor ?? c.destination;
 }
 
 export function setMuted(v: boolean) {
@@ -38,7 +53,7 @@ export function initAudio() {
   getCtx();
 }
 
-function tone(freq: number, dur = 0.12, type: OscillatorType = "sine", gain = 0.18) {
+function tone(freq: number, dur = 0.12, type: OscillatorType = "sine", gain = 0.28) {
   if (muted) return;
   const c = getCtx();
   if (!c) return;
@@ -47,7 +62,7 @@ function tone(freq: number, dur = 0.12, type: OscillatorType = "sine", gain = 0.
   osc.type = type;
   osc.frequency.value = freq;
   g.gain.value = 0;
-  osc.connect(g).connect(c.destination);
+  osc.connect(g).connect(getDest());
   const t = c.currentTime;
   g.gain.linearRampToValueAtTime(gain, t + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
@@ -60,7 +75,7 @@ function tone(freq: number, dur = 0.12, type: OscillatorType = "sine", gain = 0.
 export function playConnect(chainLength: number) {
   const base = 320;
   const f = base + Math.min(chainLength, 16) * 55;
-  tone(f, 0.07, "triangle", 0.12);
+  tone(f, 0.07, "triangle", 0.22);
 }
 
 // Soft pop when dots clear.
@@ -70,7 +85,7 @@ export function playClear(count: number) {
   if (!c) return;
   const n = Math.min(count, 8);
   for (let i = 0; i < n; i++) {
-    setTimeout(() => tone(520 + i * 45, 0.09, "sine", 0.16), i * 28);
+    setTimeout(() => tone(520 + i * 45, 0.09, "sine", 0.28), i * 28);
   }
 }
 
@@ -78,7 +93,7 @@ export function playClear(count: number) {
 export function playLoop() {
   if (muted) return;
   [392, 523, 659, 784].forEach((f, i) =>
-    setTimeout(() => tone(f, 0.22, "triangle", 0.14), i * 50)
+    setTimeout(() => tone(f, 0.22, "triangle", 0.26), i * 50)
   );
 }
 
@@ -86,7 +101,7 @@ export function playLoop() {
 export function playLevelUp() {
   if (muted) return;
   [523, 659, 784, 1047].forEach((f, i) =>
-    setTimeout(() => tone(f, 0.16, "triangle", 0.16), i * 70)
+    setTimeout(() => tone(f, 0.16, "triangle", 0.28), i * 70)
   );
 }
 
@@ -94,6 +109,6 @@ export function playLevelUp() {
 export function playFail() {
   if (muted) return;
   [330, 247].forEach((f, i) =>
-    setTimeout(() => tone(f, 0.22, "sawtooth", 0.1), i * 90)
+    setTimeout(() => tone(f, 0.22, "sawtooth", 0.2), i * 90)
   );
 }
