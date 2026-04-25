@@ -467,7 +467,7 @@ export default function GameBoard() {
     <div className="flex h-full w-full flex-col items-center justify-between gap-4 px-4 py-4 no-select">
       {/* Top HUD */}
       <div className="flex w-full max-w-md items-center justify-between text-xs uppercase tracking-[0.2em] text-foreground/50">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <span>
             {isEndless
               ? `∞ ${levelIndex - ENDLESS_START + 1}`
@@ -488,16 +488,9 @@ export default function GameBoard() {
               ENDLESS
             </span>
           )}
-          {/* Per-level score chip */}
-          {levelScore > 0 && (
-            <span style={{
-              fontSize: "9px",
-              letterSpacing: "0.1em",
-              color: "hsl(var(--dot-4) / 0.65)",
-            }}>
-              +{levelScore}
-            </span>
-          )}
+          <span style={{ color: "hsl(var(--foreground) / 0.8)" }}>
+            SCORE {totalScore + levelScore}
+          </span>
         </div>
         <div className="flex items-center gap-3">
           {isEndless && (
@@ -667,8 +660,6 @@ export default function GameBoard() {
       <div className="h-4 text-[10px] uppercase tracking-[0.25em] text-foreground/25">
         {transitioning
           ? ""
-          : isEndless
-          ? `Score ${totalScore}`
           : "Drag to connect • Loop to clear all"}
       </div>
     </div>
