@@ -1,6 +1,7 @@
 // Local persistence — fully offline.
 const KEY_LEVEL = "flow:level";
 const KEY_BEST = "flow:best";
+const KEY_SCORE = "flow:score";
 
 export function loadLevelIndex(): number {
   try {
@@ -28,5 +29,19 @@ export function loadBest(): number {
 export function saveBest(i: number) {
   try {
     localStorage.setItem(KEY_BEST, String(i));
+  } catch {}
+}
+
+export function loadTotalScore(): number {
+  try {
+    return parseInt(localStorage.getItem(KEY_SCORE) || "0", 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function saveTotalScore(score: number) {
+  try {
+    localStorage.setItem(KEY_SCORE, String(score));
   } catch {}
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Cell, Level } from "@/game/levelGenerator";
-import { getLevel, TOTAL_LEVELS } from "@/game/levels";
+import { getLevel, TOTAL_LEVELS, ENDLESS_START } from "@/game/levels";
 import {
   initAudio,
   isMuted,
@@ -16,6 +16,8 @@ import {
   loadLevelIndex,
   saveBest,
   saveLevelIndex,
+  loadTotalScore,
+  saveTotalScore,
 } from "@/game/storage";
 import { recordFail, recordMove, recordSuccess, shouldAssist } from "@/game/assist";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
@@ -89,6 +91,7 @@ export default function GameBoard() {
   const [transitioning, setTransitioning] = useState(false);
   const [muted, setMutedState] = useState<boolean>(() => isMuted());
   const [best, setBest] = useState<number>(() => loadBest());
+  const [totalScore, setTotalScore] = useState<number>(() => loadTotalScore());
 
   const boardRef = useRef<HTMLDivElement>(null);
   const cellRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
@@ -120,10 +123,10 @@ export default function GameBoard() {
 
   const loadLevel = useCallback((idx: number) => {
     clearTransitionTimer();
-    const safeIdx = idx >= TOTAL_LEVELS ? TOTAL_LEVELS - 1 : idx;
-    const assist = shouldAssist(safeIdx);
-    const l = getLevel(safeIdx, assist);
-    setLevelIndex(safeIdx);
+    // No upper cap — allows endless progression beyond level 20
+    const assist = shouldAssist(idx);
+    const l = getLevel(idx, assist);
+    setLevelIndex(idx);
     setLevel(l);
     setGrid(l.grid);
     gridRef.current = l.grid;
@@ -133,18 +136,24 @@ export default function GameBoard() {
     pathRef.current = [];
     setClearing(new Set());
     drawingRef.current = false;
-    saveLevelIndex(safeIdx);
-    if (safeIdx > best) {
-      setBest(safeIdx);
-      saveBest(safeIdx);
+    saveLevelIndex(idx);
+    if (idx > best) {
+      setBest(idx);
+      saveBest(idx);
     }
   }, [best, clearTransitionTimer]);
 
-  const levelComplete = useCallback(() => {
+  const levelComplete = useCallback((clearedThisLevel: number) => {
     playLevelUp();
     recordSuccess(levelIndex);
     clearTransitionTimer();
     setTransitioning(true);
+    // Accumulate total score
+    setTotalScore((prev) => {
+      const next = prev + clearedThisLevel;
+      saveTotalScore(next);
+      return next;
+    });
     // END MOMENT: flash "Level Complete" overlay, then advance.
     // Text is rendered in-board — no modal, no layout shift.
     setShowLevelComplete(true);
@@ -331,7 +340,7 @@ export default function GameBoard() {
         console.log(`[Game] Level ${levelIndex + 1} complete! Advancing...`);
         setCleared(nextCleared);
         setMovesLeft(nextMovesLeft);
-        levelComplete();
+        levelComplete(nextCleared);
         return;
       }
 
@@ -396,12 +405,40 @@ export default function GameBoard() {
     loadLevel(levelIndex);
   };
 
+  const isEndless = levelIndex >= ENDLESS_START;
+
   return (
     <div className="flex h-full w-full flex-col items-center justify-between gap-4 px-4 py-4 no-select">
       {/* Top HUD */}
       <div className="flex w-full max-w-md items-center justify-between text-xs uppercase tracking-[0.2em] text-foreground/50">
-        <span>Lv {level.index + 1}{level.index < TOTAL_LEVELS ? `/${TOTAL_LEVELS}` : ""}</span>
+        <div className="flex items-center gap-2">
+          <span>
+            {isEndless
+              ? `∞ ${levelIndex - ENDLESS_START + 1}`
+              : `Lv ${level.index + 1}/${TOTAL_LEVELS}`}
+          </span>
+          {isEndless && (
+            <span
+              style={{
+                fontSize: "9px",
+                letterSpacing: "0.18em",
+                color: "hsl(var(--dot-4) / 0.75)",
+                background: "hsl(var(--dot-4) / 0.12)",
+                padding: "1px 5px",
+                borderRadius: "3px",
+                border: "1px solid hsl(var(--dot-4) / 0.25)",
+              }}
+            >
+              ENDLESS
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-3">
+          {isEndless && (
+            <span style={{ fontSize: "9px", letterSpacing: "0.15em", color: "hsl(var(--foreground) / 0.35)" }}>
+              BEST {best >= ENDLESS_START ? `∞${best - ENDLESS_START + 1}` : `LV${best + 1}`}
+            </span>
+          )}
           <span>Moves {movesLeft}</span>
           <button
             onClick={restart}
@@ -530,7 +567,11 @@ export default function GameBoard() {
 
       {/* Bottom hint */}
       <div className="h-4 text-[10px] uppercase tracking-[0.25em] text-foreground/25">
-        {transitioning ? "" : "Drag to connect • Loop to clear all"}
+        {transitioning
+          ? ""
+          : isEndless
+          ? `Score ${totalScore}`
+          : "Drag to connect • Loop to clear all"}
       </div>
     </div>
   );
