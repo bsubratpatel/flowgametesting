@@ -19,8 +19,11 @@ import {
   loadTotalScore,
   saveTotalScore,
 } from "@/game/storage";
-import { recordFail, recordMove, recordSuccess, shouldAssist } from "@/game/assist";
+import { recordFail, recordMove, recordSuccess, shouldAssist, isFirstTry } from "@/game/assist";
+import { calcClearScore, calcMoveBonus, FIRST_TRY_BONUS } from "@/game/scoring";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
+
+interface ScorePopup { id: number; text: string; x: number; y: number; }
 
 const DOT_CLASS: Record<number, string> = {
   1: "bg-dot-1",
@@ -92,6 +95,10 @@ export default function GameBoard() {
   const [muted, setMutedState] = useState<boolean>(() => isMuted());
   const [best, setBest] = useState<number>(() => loadBest());
   const [totalScore, setTotalScore] = useState<number>(() => loadTotalScore());
+  const [levelScore, setLevelScore] = useState(0);
+  const [popups, setPopups] = useState<ScorePopup[]>([]);
+  const levelScoreRef = useRef(0);
+  const popupIdRef = useRef(0);
 
   const boardRef = useRef<HTMLDivElement>(null);
   const cellRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
@@ -123,7 +130,6 @@ export default function GameBoard() {
 
   const loadLevel = useCallback((idx: number) => {
     clearTransitionTimer();
-    // No upper cap — allows endless progression beyond level 20
     const assist = shouldAssist(idx);
     const l = getLevel(idx, assist);
     setLevelIndex(idx);
@@ -137,25 +143,49 @@ export default function GameBoard() {
     setClearing(new Set());
     drawingRef.current = false;
     saveLevelIndex(idx);
+    // Reset per-level score
+    levelScoreRef.current = 0;
+    setLevelScore(0);
+    setPopups([]);
     if (idx > best) {
       setBest(idx);
       saveBest(idx);
     }
   }, [best, clearTransitionTimer]);
 
-  const levelComplete = useCallback((clearedThisLevel: number) => {
+  const spawnPopup = useCallback((text: string, xPct: number, yPct: number) => {
+    const id = ++popupIdRef.current;
+    setPopups((prev) => [...prev, { id, text, x: xPct, y: yPct }]);
+    setTimeout(() => setPopups((prev) => prev.filter((p) => p.id !== id)), 800);
+  }, []);
+
+  const levelComplete = useCallback((nextMovesLeft: number) => {
+    // Check first-try BEFORE recordSuccess clears the fail count
+    const firstTry = isFirstTry(levelIndex);
     playLevelUp();
     recordSuccess(levelIndex);
     clearTransitionTimer();
     setTransitioning(true);
-    // Accumulate total score
+    // Compute completion bonuses
+    const moveBonus = calcMoveBonus(nextMovesLeft);
+    const ftBonus = firstTry ? FIRST_TRY_BONUS : 0;
+    const bonusTotal = moveBonus + ftBonus;
+    const fullLevelScore = levelScoreRef.current + bonusTotal;
+    // Show bonus popup if earned
+    if (bonusTotal > 0) {
+      const label = firstTry && moveBonus > 0
+        ? `+${bonusTotal} PERFECT!`
+        : firstTry
+        ? `+${ftBonus} FIRST TRY!`
+        : `+${moveBonus} BONUS`;
+      spawnPopup(label, 50, 42);
+    }
+    // Persist total score
     setTotalScore((prev) => {
-      const next = prev + clearedThisLevel;
+      const next = prev + fullLevelScore;
       saveTotalScore(next);
       return next;
     });
-    // END MOMENT: flash "Level Complete" overlay, then advance.
-    // Text is rendered in-board — no modal, no layout shift.
     setShowLevelComplete(true);
     transitionTimerRef.current = setTimeout(() => {
       setShowLevelComplete(false);
@@ -163,7 +193,7 @@ export default function GameBoard() {
       setTransitioning(false);
       transitionTimerRef.current = null;
     }, 280);
-  }, [clearTransitionTimer, levelIndex, loadLevel]);
+  }, [clearTransitionTimer, levelIndex, loadLevel, spawnPopup]);
 
   const restartCurrentLevel = useCallback(() => {
     if (transitioning) return;
@@ -298,6 +328,31 @@ export default function GameBoard() {
       playClear(toClear.size);
     }
 
+    // ── Score & popup (computed before DOM changes) ──────────────
+    const earned = calcClearScore(toClear.size, looped);
+    levelScoreRef.current += earned;
+    setLevelScore(levelScoreRef.current);
+    // Centroid of cleared cells (% relative to board)
+    {
+      const board = boardRef.current;
+      if (board) {
+        const br = board.getBoundingClientRect();
+        let sx = 0, sy = 0, n = 0;
+        toClear.forEach((k) => {
+          const el = cellRefs.current.get(k);
+          if (!el) return;
+          const r = el.getBoundingClientRect();
+          sx += r.left - br.left + r.width / 2;
+          sy += r.top - br.top + r.height / 2;
+          n++;
+        });
+        if (n > 0) {
+          const label = looped ? `+${earned} LOOP!` : `+${earned}`;
+          spawnPopup(label, (sx / n) / br.width * 100, (sy / n) / br.height * 100);
+        }
+      }
+    }
+
     // PEAK MOMENT detection: loop or large cluster (>=6 dots)
     const isPeak = looped || toClear.size >= 6;
 
@@ -340,7 +395,7 @@ export default function GameBoard() {
         console.log(`[Game] Level ${levelIndex + 1} complete! Advancing...`);
         setCleared(nextCleared);
         setMovesLeft(nextMovesLeft);
-        levelComplete(nextCleared);
+        levelComplete(nextMovesLeft);
         return;
       }
 
@@ -406,6 +461,7 @@ export default function GameBoard() {
   };
 
   const isEndless = levelIndex >= ENDLESS_START;
+  const movesLow = movesLeft <= 3 && movesLeft > 0;
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-between gap-4 px-4 py-4 no-select">
@@ -432,6 +488,16 @@ export default function GameBoard() {
               ENDLESS
             </span>
           )}
+          {/* Per-level score chip */}
+          {levelScore > 0 && (
+            <span style={{
+              fontSize: "9px",
+              letterSpacing: "0.1em",
+              color: "hsl(var(--dot-4) / 0.65)",
+            }}>
+              +{levelScore}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {isEndless && (
@@ -439,7 +505,17 @@ export default function GameBoard() {
               BEST {best >= ENDLESS_START ? `∞${best - ENDLESS_START + 1}` : `LV${best + 1}`}
             </span>
           )}
-          <span>Moves {movesLeft}</span>
+          {/* Moves counter — turns red + pulses at ≤3 */}
+          <span
+            style={{
+              color: movesLow ? "hsl(var(--dot-1))" : undefined,
+              animation: movesLow ? "moves-warn 0.7s ease-in-out infinite" : undefined,
+              fontWeight: movesLow ? 700 : undefined,
+              transition: "color 0.3s",
+            }}
+          >
+            Moves {movesLeft}
+          </span>
           <button
             onClick={restart}
             aria-label="Restart level"
@@ -540,6 +616,28 @@ export default function GameBoard() {
           )}
         </div>
         {lineOverlay}
+        {/* Score popups — float up at cleared cell centroid */}
+        {popups.map((p) => (
+          <div
+            key={p.id}
+            style={{
+              position: "absolute",
+              left: `${p.x}%`,
+              top: `${p.y}%`,
+              animation: "float-score 0.75s cubic-bezier(0.16,1,0.3,1) forwards",
+              pointerEvents: "none",
+              zIndex: 20,
+              fontSize: "clamp(11px, 3.2vw, 16px)",
+              fontWeight: 800,
+              letterSpacing: "0.06em",
+              color: "hsl(var(--dot-4))",
+              textShadow: "0 0 10px hsl(var(--dot-4) / 0.55)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {p.text}
+          </div>
+        ))}
         {/* END MOMENT: minimal, non-blocking level complete flash */}
         {showLevelComplete && (
           <div

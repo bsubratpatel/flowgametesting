@@ -30,3 +30,8 @@ export function shouldAssist(levelIndex: number): boolean {
   const fails = failCount.get(levelIndex) ?? 0;
   return fails >= FAIL_THRESHOLD || lowProgressMoves >= LOW_PROGRESS_THRESHOLD;
 }
+
+/** True if the player has not restarted this level yet. */
+export function isFirstTry(levelIndex: number): boolean {
+  return (failCount.get(levelIndex) ?? 0) === 0;
+}
