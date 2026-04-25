@@ -104,7 +104,7 @@ export default function GameBoard() {
     efficiency?: "PERFECT" | "CLEAN" | "SOLID";
   }>({ type: null });
 
-  const { lives, deductLife } = useLives();
+  const { lives, deductLife, resetLives, nextRefillTime } = useLives();
   const levelScoreRef = useRef(0);
   const dotsScoreRef = useRef(0);
   const loopScoreRef = useRef(0);
@@ -217,23 +217,43 @@ export default function GameBoard() {
     setTransitioning(true);
     playFail();
     recordFail(levelIndex);
+    
+    if (lives <= 1) {
+      // Immediate reset trigger when lives reach 0
+      resetLives();
+      setSheetState({ type: null }); // Remove blocking state
+      clearTransitionTimer();
+      transitionTimerRef.current = setTimeout(() => {
+        loadLevel(levelIndex);
+        setTransitioning(false);
+        transitionTimerRef.current = null;
+      }, 320);
+      return;
+    }
+
     deductLife();
     setSheetState({ type: "lose" });
-  }, [transitioning, levelIndex, deductLife]);
+  }, [transitioning, levelIndex, deductLife, lives, resetLives, loadLevel, clearTransitionTimer]);
 
   const restartCurrentLevel = useCallback(() => {
     if (transitioning) return;
     setTransitioning(true);
     playFail();
     recordFail(levelIndex);
-    deductLife(); // manual restart costs a life
+    
+    if (lives <= 1) {
+      resetLives();
+    } else {
+      deductLife(); // manual restart costs a life
+    }
+
     clearTransitionTimer();
     transitionTimerRef.current = setTimeout(() => {
       loadLevel(levelIndex);
       setTransitioning(false);
       transitionTimerRef.current = null;
     }, 320);
-  }, [clearTransitionTimer, levelIndex, loadLevel, transitioning, deductLife]);
+  }, [clearTransitionTimer, levelIndex, loadLevel, transitioning, deductLife, lives, resetLives]);
 
   // Get cell from coordinates using bounding rects (more reliable than elementFromPoint on touch)
   const cellFromPoint = (x: number, y: number): Pos | null => {

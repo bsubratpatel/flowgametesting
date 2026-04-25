@@ -76,5 +76,12 @@ export function useLives() {
     });
   };
 
-  return { lives, deductLife, nextRefillTime };
+  const resetLives = () => {
+    const now = Date.now();
+    setLives(MAX_LIVES);
+    setLastRefill(now);
+    saveLivesState(MAX_LIVES, now);
+  };
+
+  return { lives, deductLife, resetLives, nextRefillTime };
 }
