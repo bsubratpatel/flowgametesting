@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,19 +10,22 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 6%;
-    --foreground: 0 0% 98%;
+    --background: 0 0% 5.5%; /* #0E0E0E */
+    --foreground: 0 0% 100%;
 
-    --board: 0 0% 9%;
-    --cell: 0 0% 12%;
-    --cell-border: 0 0% 16%;
+    --board: 0 0% 5.5%;
+    --cell: 0 0% 10.2%; /* #1A1A1A */
+    --cell-border: 0 0% 15.3%; /* #272727 */
 
-    --dot-1: 350 90% 62%;
-    --dot-2: 200 95% 60%;
-    --dot-3: 145 65% 55%;
-    --dot-4: 45 95% 60%;
-    --dot-5: 280 75% 65%;
-    --dot-6: 25 90% 60%;
+    /* Dot Colors */
+    --dot-1: 45 90% 61%; /* Yellow #F5C842 */
+    --dot-2: 203 89% 62%; /* Blue #4AB3F4 */
+    --dot-3: 146 58% 52%; /* Green #3EC97A */
+    --dot-4: 350 82% 66%; /* Red/Pink #F0627A */
+    --dot-5: 266 88% 69%; /* Purple #A76CF5 */
+    --dot-6: 180 61% 53%; /* Cyan #3ECFCF */
+    --dot-7: 21 90% 63%; /* Orange #F5874A */
+    --dot-8: 0 0% 91%; /* White #E8E8E8 */
 
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
@@ -112,7 +117,7 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
-    font-family: ui-sans-serif, system-ui, -apple-system, "SF Pro Display", "Inter", sans-serif;
+    font-family: "Inter", sans-serif;
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
   }

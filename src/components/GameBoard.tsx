@@ -21,6 +21,8 @@ import {
 } from "@/game/storage";
 import { recordFail, recordMove, recordSuccess, shouldAssist, isFirstTry } from "@/game/assist";
 import { calcClearScore, calcMoveBonus, FIRST_TRY_BONUS } from "@/game/scoring";
+import { useLives } from "@/game/useLives";
+import { WinSheet, LoseSheet } from "@/components/Sheets";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
 
 interface ScorePopup { id: number; text: string; x: number; y: number; }
@@ -85,19 +87,25 @@ export default function GameBoard() {
   const [cleared, setCleared] = useState(0);
   const [path, setPath] = useState<Pos[]>([]);
   const [clearing, setClearing] = useState<Set<string>>(new Set());
-  // peakClearing: cells being cleared as a PEAK moment (loop or large cluster)
   const [peakClearing, setPeakClearing] = useState<Set<string>>(new Set());
-  // boardShaking: triggers the subtle screen-shake on peak moments
   const [boardShaking, setBoardShaking] = useState(false);
-  // showLevelComplete: flashes the end-moment text overlay
-  const [showLevelComplete, setShowLevelComplete] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
   const [muted, setMutedState] = useState<boolean>(() => isMuted());
   const [best, setBest] = useState<number>(() => loadBest());
   const [totalScore, setTotalScore] = useState<number>(() => loadTotalScore());
   const [levelScore, setLevelScore] = useState(0);
   const [popups, setPopups] = useState<ScorePopup[]>([]);
+  
+  const [sheetState, setSheetState] = useState<{ 
+    type: "win" | "lose" | null; 
+    breakdown?: any; 
+    efficiency?: "PERFECT" | "CLEAN" | "SOLID";
+  }>({ type: null });
+
+  const { lives, deductLife } = useLives();
   const levelScoreRef = useRef(0);
+  const dotsScoreRef = useRef(0);
+  const loopScoreRef = useRef(0);
   const popupIdRef = useRef(0);
 
   const boardRef = useRef<HTMLDivElement>(null);
@@ -145,6 +153,8 @@ export default function GameBoard() {
     saveLevelIndex(idx);
     // Reset per-level score
     levelScoreRef.current = 0;
+    dotsScoreRef.current = 0;
+    loopScoreRef.current = 0;
     setLevelScore(0);
     setPopups([]);
     if (idx > best) {
@@ -159,7 +169,7 @@ export default function GameBoard() {
     setTimeout(() => setPopups((prev) => prev.filter((p) => p.id !== id)), 800);
   }, []);
 
-  const levelComplete = useCallback((nextMovesLeft: number) => {
+  const levelComplete = useCallback((nextMovesLeft: number, initialMoves: number) => {
     // Check first-try BEFORE recordSuccess clears the fail count
     const firstTry = isFirstTry(levelIndex);
     playLevelUp();
@@ -171,6 +181,15 @@ export default function GameBoard() {
     const ftBonus = firstTry ? FIRST_TRY_BONUS : 0;
     const bonusTotal = moveBonus + ftBonus;
     const fullLevelScore = levelScoreRef.current + bonusTotal;
+
+    const efficiency = nextMovesLeft >= Math.floor(initialMoves * 0.5) ? "PERFECT" : nextMovesLeft > 0 ? "CLEAN" : "SOLID";
+    const breakdown = {
+      dots: dotsScoreRef.current,
+      loop: loopScoreRef.current,
+      moves: moveBonus,
+      firstTry: ftBonus,
+    };
+
     // Show bonus popup if earned
     if (bonusTotal > 0) {
       const label = firstTry && moveBonus > 0
@@ -180,33 +199,39 @@ export default function GameBoard() {
         : `+${moveBonus} BONUS`;
       spawnPopup(label, 50, 42);
     }
+    
     // Persist total score
     setTotalScore((prev) => {
       const next = prev + fullLevelScore;
       saveTotalScore(next);
       return next;
     });
-    setShowLevelComplete(true);
-    transitionTimerRef.current = setTimeout(() => {
-      setShowLevelComplete(false);
-      loadLevel(levelIndex + 1);
-      setTransitioning(false);
-      transitionTimerRef.current = null;
-    }, 280);
-  }, [clearTransitionTimer, levelIndex, loadLevel, spawnPopup]);
+
+    setSheetState({ type: "win", breakdown, efficiency });
+  }, [clearTransitionTimer, levelIndex, spawnPopup]);
+
+  const handleLoss = useCallback(() => {
+    if (transitioning) return;
+    setTransitioning(true);
+    playFail();
+    recordFail(levelIndex);
+    deductLife();
+    setSheetState({ type: "lose" });
+  }, [transitioning, levelIndex, deductLife]);
 
   const restartCurrentLevel = useCallback(() => {
     if (transitioning) return;
     setTransitioning(true);
     playFail();
     recordFail(levelIndex);
+    deductLife(); // manual restart costs a life
     clearTransitionTimer();
     transitionTimerRef.current = setTimeout(() => {
       loadLevel(levelIndex);
       setTransitioning(false);
       transitionTimerRef.current = null;
     }, 320);
-  }, [clearTransitionTimer, levelIndex, loadLevel, transitioning]);
+  }, [clearTransitionTimer, levelIndex, loadLevel, transitioning, deductLife]);
 
   // Get cell from coordinates using bounding rects (more reliable than elementFromPoint on touch)
   const cellFromPoint = (x: number, y: number): Pos | null => {
@@ -391,11 +416,16 @@ export default function GameBoard() {
       console.log(`[Game] Move resolved. Cleared: ${nextCleared}/${level.target}, Moves left: ${nextMovesLeft}`);
       recordMove(clearedCount);
 
+      dotsScoreRef.current += clearedCount * 10;
+      if (looped) {
+        loopScoreRef.current += earned - (clearedCount * 10);
+      }
+
       if (nextCleared >= level.target) {
         console.log(`[Game] Level ${levelIndex + 1} complete! Advancing...`);
         setCleared(nextCleared);
         setMovesLeft(nextMovesLeft);
-        levelComplete(nextMovesLeft);
+        levelComplete(nextMovesLeft, level.moves);
         return;
       }
 
@@ -403,7 +433,7 @@ export default function GameBoard() {
       setMovesLeft(nextMovesLeft);
 
       if (nextMovesLeft <= 0) {
-        restartCurrentLevel();
+        handleLoss();
       }
     }, 220);
   };
@@ -465,80 +495,64 @@ export default function GameBoard() {
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-between gap-4 px-4 py-4 no-select">
-      {/* Top HUD */}
-      <div className="flex w-full max-w-md items-center justify-between text-xs uppercase tracking-[0.2em] text-foreground/50">
-        <div className="flex items-center gap-3">
-          <span>
-            {isEndless
-              ? `∞ ${levelIndex - ENDLESS_START + 1}`
-              : `Lv ${level.index + 1}/${TOTAL_LEVELS}`}
-          </span>
-          {isEndless && (
-            <span
-              style={{
-                fontSize: "9px",
-                letterSpacing: "0.18em",
-                color: "hsl(var(--dot-4) / 0.75)",
-                background: "hsl(var(--dot-4) / 0.12)",
-                padding: "1px 5px",
-                borderRadius: "3px",
-                border: "1px solid hsl(var(--dot-4) / 0.25)",
-              }}
-            >
-              ENDLESS
+      {/* Top HUD Area */}
+      <div className="flex w-full max-w-md flex-col gap-5">
+        {/* Row 1: Brand & Level */}
+        <div className="flex items-center justify-between font-display font-bold uppercase">
+          <div className="flex items-center gap-4 text-foreground">
+            <span className="cursor-pointer text-foreground/50 transition hover:text-foreground">←</span>
+            <span className="text-[20px] tracking-[0.08em]">
+              FLOW<span style={{ color: activeColor ? `hsl(${DOT_VAR[activeColor]})` : "inherit" }}>.</span>
             </span>
-          )}
-          <span style={{ color: "hsl(var(--foreground) / 0.8)" }}>
-            SCORE {totalScore + levelScore}
-          </span>
+          </div>
+          <div className="text-[10px] tracking-[0.18em] text-foreground/50">
+            {isEndless ? `∞ ${levelIndex - ENDLESS_START + 1}` : `LV ${level.index + 1}/${TOTAL_LEVELS}`}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {isEndless && (
-            <span style={{ fontSize: "9px", letterSpacing: "0.15em", color: "hsl(var(--foreground) / 0.35)" }}>
-              BEST {best >= ENDLESS_START ? `∞${best - ENDLESS_START + 1}` : `LV${best + 1}`}
-            </span>
-          )}
-          {/* Moves counter — turns red + pulses at ≤3 */}
-          <span
+
+        {/* Row 2: Lives & Moves */}
+        <div className="flex items-center justify-between font-sans text-[11px] font-medium tracking-[0.18em]">
+          <div className="flex gap-1">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <span key={i} className={i < lives ? "text-foreground" : "text-foreground/20"}>
+                ❤
+              </span>
+            ))}
+          </div>
+          <div
+            className="flex items-center gap-4"
             style={{
-              color: movesLow ? "hsl(var(--dot-1))" : undefined,
-              animation: movesLow ? "moves-warn 0.7s ease-in-out infinite" : undefined,
-              fontWeight: movesLow ? 700 : undefined,
-              transition: "color 0.3s",
+              color: movesLow ? "hsl(var(--dot-1))" : "hsl(var(--foreground) / 0.5)",
+              fontWeight: movesLow ? 700 : 500,
             }}
           >
-            Moves {movesLeft}
-          </span>
-          <button
-            onClick={restart}
-            aria-label="Restart level"
-            className="rounded p-1 text-foreground/50 transition hover:text-foreground/90"
-          >
-            <RotateCcw size={14} />
-          </button>
-          <button
-            onClick={toggleMute}
-            aria-label={muted ? "Unmute" : "Mute"}
-            className="rounded p-1 text-foreground/50 transition hover:text-foreground/90"
-          >
-            {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-          </button>
+            <span>MOVES {movesLeft}</span>
+            {/* Keeping utility buttons subtle next to moves for now */}
+            <div className="flex items-center gap-2 text-foreground/30">
+              <button onClick={restart} aria-label="Restart level" className="transition hover:text-foreground/80">
+                <RotateCcw size={12} />
+              </button>
+              <button onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} className="transition hover:text-foreground/80">
+                {muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Objective bar */}
-      <div className="w-full max-w-md">
-        <div className="mb-2 flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-foreground/40">
-          <span>Clear {level.target}</span>
-          <span>
-            {cleared}/{level.target}
-          </span>
-        </div>
-        <div className="h-[2px] w-full overflow-hidden rounded-full bg-cell-border">
-          <div
-            className="h-full bg-foreground/80 transition-[width] duration-300 ease-out"
-            style={{ width: `${progress}%` }}
-          />
+        {/* Row 3: Progress */}
+        <div className="w-full">
+          <div className="mb-2 flex items-center justify-between font-sans text-[10px] font-medium uppercase tracking-[0.2em] text-foreground/40">
+            <span>Clear {level.target}</span>
+            <span>
+              {cleared}/{level.target}
+            </span>
+          </div>
+          <div className="h-[1.5px] w-full overflow-hidden bg-cell-border">
+            <div
+              className="h-full bg-foreground transition-[width] duration-300 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
       </div>
 
@@ -631,29 +645,6 @@ export default function GameBoard() {
             {p.text}
           </div>
         ))}
-        {/* END MOMENT: minimal, non-blocking level complete flash */}
-        {showLevelComplete && (
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              animation: "level-complete-fade 0.22s cubic-bezier(0.16,1,0.3,1) forwards",
-              pointerEvents: "none",
-              zIndex: 10,
-              fontSize: "clamp(14px, 4vw, 20px)",
-              fontWeight: 700,
-              letterSpacing: "0.22em",
-              textTransform: "uppercase",
-              color: "hsl(var(--foreground))",
-              textShadow: "0 0 18px hsl(var(--foreground) / 0.6)",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Level Complete
-          </div>
-        )}
       </div>
 
       {/* Bottom hint */}
@@ -662,6 +653,38 @@ export default function GameBoard() {
           ? ""
           : "Drag to connect • Loop to clear all"}
       </div>
+
+      {/* Sheets Overlay */}
+      {sheetState.type === "win" && (
+        <WinSheet
+          levelIndex={levelIndex}
+          efficiency={sheetState.efficiency!}
+          breakdown={sheetState.breakdown!}
+          levelScore={sheetState.breakdown!.dots + sheetState.breakdown!.loop + sheetState.breakdown!.moves + sheetState.breakdown!.firstTry}
+          totalScore={totalScore}
+          onNext={() => {
+            setSheetState({ type: null });
+            loadLevel(levelIndex + 1);
+            setTransitioning(false);
+          }}
+          onRetry={() => {
+            setSheetState({ type: null });
+            loadLevel(levelIndex);
+            setTransitioning(false);
+          }}
+        />
+      )}
+
+      {sheetState.type === "lose" && (
+        <LoseSheet
+          livesRemaining={lives}
+          onRetry={() => {
+            setSheetState({ type: null });
+            loadLevel(levelIndex);
+            setTransitioning(false);
+          }}
+        />
+      )}
     </div>
   );
 }
