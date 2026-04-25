@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Cell, Level } from "@/game/levelGenerator";
 import { getLevel, TOTAL_LEVELS, ENDLESS_START } from "@/game/levels";
 import {
@@ -80,6 +81,7 @@ function gravity(grid: Cell[][]): Cell[][] {
 }
 
 export default function GameBoard() {
+  const navigate = useNavigate();
   const [levelIndex, setLevelIndex] = useState<number>(() => loadLevelIndex());
   const [level, setLevel] = useState<Level>(() => getLevel(loadLevelIndex()));
   const [grid, setGrid] = useState<Cell[][]>(level.grid);
@@ -500,7 +502,12 @@ export default function GameBoard() {
         {/* Row 1: Brand & Level */}
         <div className="flex items-center justify-between font-display font-bold uppercase">
           <div className="flex items-center gap-4 text-foreground">
-            <span className="cursor-pointer text-foreground/50 transition hover:text-foreground">←</span>
+            <span 
+              onClick={() => navigate("/")}
+              className="cursor-pointer text-foreground/50 transition hover:text-foreground"
+            >
+              ←
+            </span>
             <span className="text-[20px] tracking-[0.08em]">
               FLOW<span style={{ color: activeColor ? `hsl(${DOT_VAR[activeColor]})` : "inherit" }}>.</span>
             </span>
