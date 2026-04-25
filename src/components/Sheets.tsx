@@ -1,4 +1,4 @@
-import { Share2, RotateCcw } from "lucide-react";
+import { Share2, RotateCcw, Heart, Zap, Check } from "lucide-react";
 
 interface WinSheetProps {
   levelIndex: number;
@@ -46,12 +46,12 @@ export function WinSheet({
     <div className="absolute inset-x-0 bottom-0 z-50 rounded-t-3xl border-t border-white/5 bg-[#1A1A1A] p-6 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-300">
       <div className="mx-auto mb-6 h-1 w-12 rounded-full bg-white/10" />
 
-      <h2 className="font-display text-xl font-bold uppercase tracking-widest text-foreground">
-        Level {levelIndex + 1} Cleared <span className="ml-2 text-white/50">✓</span>
+      <h2 className="flex items-center font-display text-xl font-bold uppercase tracking-widest text-foreground">
+        Level {levelIndex + 1} Cleared <Check className="ml-2 text-white/50" size={20} strokeWidth={3} />
       </h2>
 
-      <div className="mt-2 font-display text-sm font-bold uppercase tracking-widest" style={{ color: efficiencyColor }}>
-        ⚡ {efficiency}
+      <div className="mt-2 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-widest" style={{ color: efficiencyColor }}>
+        <Zap size={14} fill="currentColor" /> {efficiency}
       </div>
 
       <div className="my-6 h-px w-full bg-white/5" />
@@ -146,15 +146,18 @@ export function LoseSheet({ onRetry, livesRemaining }: LoseSheetProps) {
       </h2>
 
       <div className="mt-2 font-display text-sm font-bold uppercase tracking-widest text-foreground/50">
-        😅 BARELY
+        BARELY
       </div>
 
       <div className="my-6 flex items-center justify-between text-sm tracking-widest text-foreground/40">
         <div className="flex gap-1">
           {Array.from({ length: 3 }).map((_, i) => (
-            <span key={i} className={i < livesRemaining ? "text-foreground" : "text-foreground/20"}>
-              ❤
-            </span>
+            <Heart 
+              key={i} 
+              size={14} 
+              fill={i < livesRemaining ? "currentColor" : "none"} 
+              className={i < livesRemaining ? "text-foreground" : "text-foreground/20"} 
+            />
           ))}
         </div>
         <span>-1 life</span>

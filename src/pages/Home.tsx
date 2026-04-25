@@ -37,9 +37,8 @@ export default function Home() {
         </div>
         
         {/* Streak */}
-        <div className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-widest text-[hsl(var(--dot-1))]">
-          <span>🔥</span>
-          <span>7 DAYS</span>
+        <div className="flex items-center justify-center font-display text-sm font-bold uppercase tracking-widest text-[hsl(var(--dot-1))]">
+          <span>7 DAYS STREAK</span>
         </div>
 
         {/* Current Level Info */}

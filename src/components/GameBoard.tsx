@@ -24,7 +24,7 @@ import { recordFail, recordMove, recordSuccess, shouldAssist, isFirstTry } from 
 import { calcClearScore, calcMoveBonus, FIRST_TRY_BONUS } from "@/game/scoring";
 import { useLives } from "@/game/useLives";
 import { WinSheet, LoseSheet } from "@/components/Sheets";
-import { Volume2, VolumeX, RotateCcw } from "lucide-react";
+import { Volume2, VolumeX, RotateCcw, Heart } from "lucide-react";
 
 interface ScorePopup { id: number; text: string; x: number; y: number; }
 
@@ -521,9 +521,12 @@ export default function GameBoard() {
         <div className="flex items-center justify-between font-sans text-[11px] font-medium tracking-[0.18em]">
           <div className="flex gap-1">
             {Array.from({ length: 3 }).map((_, i) => (
-              <span key={i} className={i < lives ? "text-foreground" : "text-foreground/20"}>
-                ❤
-              </span>
+              <Heart
+                key={i}
+                size={12}
+                fill={i < lives ? "currentColor" : "none"}
+                className={i < lives ? "text-foreground" : "text-foreground/20"}
+              />
             ))}
           </div>
           <div
