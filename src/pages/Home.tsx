@@ -24,23 +24,7 @@ export default function Home() {
       </div>
 
       <div className="mt-12 flex w-full max-w-md flex-col items-center">
-        {/* Heatmap Preview */}
-        <div className="mb-4 grid grid-cols-7 gap-[3px]">
-          {heatmapData.map((active, i) => (
-            <div
-              key={i}
-              className={`h-3 w-3 rounded-[2px] ${
-                active ? "bg-[hsl(var(--dot-1))]" : "bg-white/5"
-              }`}
-            />
-          ))}
-        </div>
         
-        {/* Streak */}
-        <div className="flex items-center justify-center font-display text-sm font-bold uppercase tracking-widest text-[hsl(var(--dot-1))]">
-          <span>7 DAYS STREAK</span>
-        </div>
-
         {/* Current Level Info */}
         <div className="my-16 flex flex-col items-center gap-2">
           <h2 className="font-display text-4xl font-bold uppercase tracking-widest text-foreground">
@@ -61,15 +45,7 @@ export default function Home() {
           >
             CONTINUE
           </button>
-          
-          <button className="w-full rounded-2xl border border-white/10 bg-transparent py-4 font-display text-[15px] font-bold tracking-[0.2em] text-foreground transition hover:bg-white/5 active:scale-[0.98]">
-            DAILY CHALLENGE <span className="ml-1 text-[hsl(var(--dot-3))]">✦</span>
-          </button>
         </div>
-
-        <button className="mt-8 font-sans text-xs font-bold tracking-[0.2em] text-foreground/40 transition hover:text-foreground">
-          YOUR STATS →
-        </button>
       </div>
     </main>
   );
